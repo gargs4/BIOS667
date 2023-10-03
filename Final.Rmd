@@ -1,0 +1,435 @@
+---
+title: "BNFO667 Final - Lung Cancer Prediction"
+author: "Sakshi Garg"
+date: "2023-04-25"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+rm(list=ls())
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  warning = FALSE,
+  message = FALSE,
+  fig.width = 4,
+  fig.height = 3
+)
+```
+
+## Background
+  Lung cancer is a type of cancer that starts in the lungs and can spread to other parts of the body. It is the leading cause of cancer-related deaths worldwide (Brocken, et al., 2012). There are two main types of lung cancer: non-small cell lung cancer (NSCLC) and small cell lung cancer (SCLC) (Dela Cruz, et al., 2011). The predictors in the dataset used include demographic and clinical features such as age, sex, smoking status, occupational hazard, genetic risk, diet, and obesity. These predictors could be used to develop models that predict the likelihood of lung cancer, the severity of the disease, and the prognosis for patients with lung cancer (Kumar, et al., 2022). Using both supervised and unsupervised learning methods, these models could be used to inform treatment decisions and improve patient outcomes. 
+  As lung cancer is a binary classification problem (cancer vs non-cancer), unsupervised methods would not be appropriate for predicting lung cancer in this dataset. Unsupervised methods are used to explore and find patterns in data without the use of labeled examples. In contrast, supervised methods use labeled examples to train a model to predict an outcome.
+
+## Dataset from Kaggle
+ The Data from Kaggle: https://www.kaggle.com/datasets/thedevastator/cancer-patients-and-air-pollution-a-new-link
+ - contains 1000 rows, each corresponding to a different lung cancer patient's attributes.
+ - gender column: 1 = male, 2 = female
+ - Level column indicates severity
+ 
+
+```{r}
+data<- read.csv("~/Desktop/R/bios667/final/lungcancer.csv", header = TRUE)
+head(data)
+```
+## Methods 
+
+
+## Cleaning the data
+
+```{r}
+library(caret)
+library(tidyverse)
+```
+
+```{r}
+#check for NA's in data
+data %>% sapply(function(x)sum(is.na(x)))
+```
+
+```{r}
+#rename columns
+names(data)<- c('Index','PatientID','Age','Gender','AirPollution','AlcoholUse','DustAllergy','OccupationalHazards','GeneticRisk',
+              'ChronicLungDisease','BalancedDiet','Obesity','Smoking','PassiveSmoker','ChestPain','CoughingOfBlood','Fatigue',
+             'WeightLoss','ShortnessOfBreath','Wheezing','SwallowingDifficulty','ClubbingOfFingerNails','FrequentCold','DryCough',
+             'Snoring','Level')
+```
+
+```{r}
+#convert values
+data <- data %>% mutate_if(is.character,as.factor)
+summary(data)
+```
+
+- Dataset has 1000 rows, 25 columns: patient ID, age, gender, air pollution, alcohol use, dust allergy, occupational hazards, genetic risk, chronic lung disease, balanced diet, obesity, smoking, passive smoker, chest pain, coughing of blood, fatigue, weight loss, shortness of breath, wheezing, swallowing difficulty, clubbing of finger nails, frequent cold, dry cough, snoring, and level (severity of the cancer)
+
+- checking correlations of variables:
+```{r}
+data %>% mutate_if(is.factor,as.numeric) %>% cor() %>% as.data.frame() %>% select('Level') %>% arrange(-Level)
+```
+
+## Supervised Learning methods:
+- multinomial classification model to predict whether a patient has lung cancer or not based on the data in the dataset
+- machine learning algorithms: penalized logistic regression and random forest
+
+```{r}
+# Split the data into training and testing datasets 70:30 split
+set.seed(100)
+train_idx <- sample(1:nrow(data), 0.7*nrow(data))
+train_data <- data[train_idx,-c(1:2) ]
+test_data <- data[-train_idx,-c(1:2) ]
+
+
+```
+
+```{r}
+library(nnet)
+# Train a logistic regression model
+model <- multinom(Level ~ ., data = train_data)
+model
+```
+Output of multinomial logistic model on training data:
+- The "Call" section shows the formula used for the model, which is "multinom(formula = Level ~ ., data = train_data)", indicating that the outcome variable is "Level" and all the other variables in the dataset are used as predictors.
+-  the coefficient for "Age" is -0.7931641 for the "Low" outcome, which means that for each one-unit increase in age, the log-odds of being in the "Low" outcome level decreases by 0.7931641, holding all other variables constant. Similarly, the coefficient for "Gender" is -2.3564357 for the "Low" outcome, which means that females have lower odds of being in the "Low" outcome level than males.
+-  smaller residual deviance value indicates a better fit of the model to the data
+-  lower AIC value indicates a better model fit, while considering the number of predictor variables included in the model
+
+
+## Confusion Matrix to see how well model works
+```{r}
+# Make predictions on the test data
+pred <- predict(model, newdata = test_data, type = "class")
+# Evaluate the performance of the model
+confusionMatrix(pred, test_data$Level)
+
+```
+
+- it seems that the model has very high accuracy (0.9967) and performs very well in predicting all levels.
+- The sensitivity, specificity, positive predictive value, negative predictive value, detection rate, and detection prevalence are all high for each level. 
+- The only misclassification occurred in one observation where it was predicted to be medium, but it was actually low
+
+## Check if random forest is better
+
+## Random Forest
+
+```{r}
+library(randomForest)
+```
+
+```{r}
+set.seed(123)
+rf <- randomForest(Level~.,data=train_data)
+rf
+```
+- The random forest model trained on the training data seems to perform very well with an OOB error rate of 0% and perfect confusion matrix on the training data.
+
+Using random forest to make predictions on the test data:
+```{r}
+# Make predictions on the test data
+pred <- predict(rf, newdata = test_data)
+# Evaluate the performance of the model
+confusionMatrix(pred, test_data$Level)
+``` 
+- The random forest model appears to have achieved perfect accuracy on the test data!!
+- with an overall accuracy of 1 and perfect sensitivities and specificities for each class. 
+- It's important to note that this may be an overfitting issue, especially given the perfect OOB estimate of 0% error rate. 
+- This could be the limited size of the dataset, which may lead to overfitting in complex models such as random forests.
+- It would be ideal to see the model's performance on new data from a larger dataset
+
+So far, the models have shown us that obesity, air pollution, balanced diet, cough of blood, passive smoker are all strongly correlated with lung cancer
+- balanced diet is a very odd attirbute that could lead to lung cancer.
+
+Additionally, the Random Forest model performed slightly better than the penalized logistic regression, with <0.01 more accuracy.
+
+## K-nearest neighbors (KNN)
+```{r, results = FALSE}
+library(class)
+library(dplyr)
+as.numeric(train_data$Level)
+as.numeric(test_data$Level)
+train_data1 <- mutate_all(train_data[,-24], function(x) as.numeric(as.character(x)))
+test_data1 <- mutate_all(test_data[,-24], function(x) as.numeric(as.character(x)))
+```
+```{r, results= FALSE}
+
+cbind(train_data1, train_data$Level)
+cbind(test_data1, test_data$Level)
+```
+
+```{r}
+k <- 5 # number of neighbors to consider
+pred1 <- knn(train_data1, test_data1, train_data$Level, k)
+
+confusionMatrix(pred1, test_data$Level)
+```
+
+- the k-nearest neighbors model performs very well on this data with an accuracy of 0.9967. The model correctly predicts the high-risk patients with a sensitivity of 1.00 and the low-risk patients with a specificity of 1.00. The model also correctly predicts the medium-risk patients with a sensitivity of 1.0000 and a positive predictive value of 0.9897.
+- Overall, this model performed the same as the penalized logistic regression and slightly worse than the random forest
+
+
+## Unsupervised Methods
+-  Unsupervised learning methods are used when there is no labeled data available, and the goal is to discover patterns and structure in the data.
+- In the case of predicting lung cancer, unsupervised learning methods can be used to identify groups of patients with similar characteristics or to identify features that are most strongly associated with lung cancer. 
+
+## PCA dimensionality reduction
+- finding the linear combinations of the features that explain the maximum variance in the data
+- develop a better understanding of the factors that contribute to lung cancer and potentially inform future predictive models
+  - can't really predict lung cancer directly
+```{r}
+library(factoextra)
+# Extract features
+df<- data[,-26]
+df<- data[,-1:-2]
+```
+```{r}
+#remove patien ID, index, and level
+features <- df[,-24]
+```
+```{r}
+# Perform PCA
+pca <- princomp(features)
+
+# View summary of PCA results
+summary(pca)
+pca
+
+# Extract eigenvalues/variances
+get_eig(pca)
+
+# Scree Plot PCA results
+fviz_screeplot(pca, addLabels = TRUE,ylim = c(0, 65))
+```
+
+```{r, include=FALSE}
+# check pca loadings / eigenvectors
+pca$loadings
+
+#eigenvalues
+eigen<- pca$sdev * pca$sdev
+
+pc<- pca$scores
+cor(pc)
+# all values are very close to 0
+# these components are all independent
+
+#correlation matrix
+cor(features, pca$scores)
+```
+
+- Analysis:
+- The cumulative proportion of variance for the first two principal components is 51.32%.
+- the first principal component (PC1) is positively correlated with all variables except for gender, which has a negative correlation.     
+-This suggests that PC1 represents an overall measure of health status, with higher values indicating better health. 
+- The second principal component (PC2) is negatively correlated with alcohol use and balanced diet, and positively correlated with chronic lung disease and obesity, suggesting that PC2 may represent a measure of lifestyle and chronic disease risk
+- the correlations for all of the components are very close to 0, indicating that these components are all independent, and uncorrelated
+
+## Default PCA Plot
+```{r}
+library(ggplot2)
+library(ggfortify)
+library(plotly)
+library(ggrepel)
+
+```
+
+
+## Default graph of variables and loading vectors
+```{r}
+# Perform PCA
+data_unsupervised_scaled <- scale(features, center = TRUE, scale = TRUE)
+
+pca_unsupervised <- prcomp(data_unsupervised_scaled, scale = TRUE)
+```
+```{r, fig.width=10, fig.height=6}
+# Plot PCA
+fviz_pca_var(pca_unsupervised, col.var = "contrib", gradient.cols = c("gray", "blue", "red"), 
+             label = "var", ggtheme = theme_minimal())
+```
+
+- variables in red have highest contribution to the principal components 
+- 39.6% of the variation in the dataset is explained in the first dimension
+- factors like gender, snoring, and wheezing do not seem to have high contributions here
+- passive smoker, smoking, and coughing of blood have high contributions in this plot and are positively correlated with PC1 
+
+```{r}
+classes <- data$Level
+
+# unsupervised, so remove level column
+lung_cancer <- select(data, -Level)
+lung_cancer$PatientID<- as.numeric(lung_cancer$PatientID)
+# PCA
+pca_data <- prcomp(lung_cancer, scale = TRUE)
+pca_data <- data.frame(pca_data$x[, 1:2], classes = classes)
+
+# Create label data
+label_data <- data.frame(PC1 = pca_data$PC1, PC2 = pca_data$PC2, label = names(lung_cancer))
+```
+```{r, fig.width=10, fig.height=6}
+# Plot PCA
+ggplot(pca_data, aes(x = PC1, y = PC2, color = classes)) +
+  geom_point() +
+  geom_text_repel(aes(label = "Attributes")) +
+  labs(x = "PC1", y = "PC2", color = "Class") +
+  ggtitle("PCA plot of lung cancer data")
+
+```
+- green (low) is clustered high in 2nd dimension, while red (high) is clustered high and low in the 1st dimension
+- medium is also all over the plot, explained by both dimensions
+
+
+## K-means clustering
+
+Check how balanced the original dataset is:
+```{r}
+table(data$Level)
+```
+- it's not perfectly balanced, but there should be enough observations of each level for the k-means to work.
+
+```{r}
+# Standardize the data, features has no labels and level column is removed
+lung_cluster_std <- scale(features[,-1])
+```
+
+
+```{r}
+# euclidean distances, part of factoextra package
+features_data<- dist(lung_cluster_std)
+```
+
+```{r}
+# find optimal number of clusters
+# within sum squares metric
+fviz_nbclust(lung_cluster_std, kmeans, method = "wss")+
+  labs(subtitle = "Elbow Method")
+
+# we will use 7 clusters, k = 7
+```
+
+
+```{r}
+
+# Perform k-means clustering with k=6
+km <- kmeans(lung_cluster_std, centers=7, nstart=100)
+
+# View the clustering results
+print(km)
+```
+
+Visual of K-means
+```{r}
+cluster<- km$cluster
+rownames(lung_cluster_std)<- paste(data$Level, 1:dim(data)[1], sep = "_")
+```
+
+```{r, fig.width=10, fig.height=6}
+fviz_cluster(list(data= lung_cluster_std, cluster = cluster))
+```
+```{r}
+table(cluster, data$Level)
+```
+- Clusters 1, 2, 3, and 6 correctly predict high, low and medium levels
+- Clusters 4, 5 and 7 misclassified some obervations
+- High level is associated with clusters 3, 5 and 6
+
+```{r, fig.width=10, fig.height=6}
+# Calculate the mean values of the features within each cluster
+cluster_means <- aggregate(features[,-1], by=list(cluster=km$cluster), FUN=mean)
+
+# View the results
+print(cluster_means)
+
+# add labels to the bar plot
+text(x = barplot(t(cluster_means[,-1]), beside = TRUE, col = c("red", "orange", "yellow", "green", "blue", "purple", "pink"), ylab = "Standardized Mean Values"), 
+     labels = colnames(lung_cluster_std),
+     y = 0,
+     xpd = TRUE,
+     srt = 90, adj = c(1,1),
+     cex= 0.5)
+legend("topright", legend=paste("Cluster", 1:7), fill=c("red", "orange", "yellow", "green", "blue", "purple", "pink"), cex = 0.5)
+```
+- in the 1st cluster: the top highest variables are alcohol use and passive smoking
+- in the 2nd cluster: dust allergy, smoking, genetic risk, chest pain, and balanced diet are the top variables
+      - still unsure why balanced diet is showing up as a strong predictor of lung cancer/ severity, could be an issue with the dataset
+- in the 3rd cluster:  occupational hazard, chest pain, and dust allergy are the top variables
+- in the 4th cluster: alcohol use, shortness of breath, obesity, and chest pain are the highest variables
+- in the 5th cluster: dust allergy, balanced diet, and genetic risk are the highest occuring 
+- in the 6th cluster: clubbing of finger nails, and occupational hazard are the highest occuring
+      - finger clubbing is a sign of many adverse health conditions, including lung and heart issues (Hirakata, 1995). 
+- in the 7th cluster: alcohol use, smoking, and obesity are the highest occuring 
+
+Finding 10 highest features by mean value:
+```{r}
+# Calculate mean values for each feature across all clusters
+feature_means <- apply(cluster_means[, -1], 2, mean)
+
+# Order means in descending order
+ordered_means <- sort(feature_means, decreasing = TRUE)
+
+# Identify top 5 features with highest mean values
+top_features <- names(ordered_means)[1:10]
+
+# Print top features
+cat("Top 10 features by mean value: \n")
+cat(top_features, sep = "\n")
+```
+
+## Kmeans cluster only on Top 10 Variables
+
+
+```{r}
+# subset data
+data1<- data[,c("DustAllergy", "OccupationalHazards", "CoughingOfBlood", "AlcoholUse", "GeneticRisk", "BalancedDiet","ShortnessOfBreath", "Obesity","ChestPain","ChronicLungDisease")]
+scaled<- scale(data1)
+# find optimal number of clusters
+# within sum squares metric
+fviz_nbclust(scaled, kmeans, method = "wss")+
+  labs(subtitle = "Elbow Method")
+```
+```{r}
+#use 4 clusters
+lung_clusters <- kmeans(scaled, centers = 4, nstart = 100)
+
+```
+
+Visual of K-means
+```{r}
+cluster1<- lung_clusters$cluster
+rownames(scaled)<- paste(data$Level, 1:dim(data)[1], sep = "_")
+```
+
+```{r, fig.width= 10, fig.height=6}
+# Visualize the results with fviz_cluster
+fviz_cluster(list(data= scaled, cluster = cluster1))
+table(cluster1, data$Level)
+```
+- Using less parameters caused the model to misclassify many more observations than the previous k-means clustering, however more of the data is being shown in the first and second dimensions, 81.2% is explained in the first 2 dimensions
+- Only the 2nd cluster classified everything correctly. 
+
+
+## Discussion / Analysis
+Supervised Methods:
+ In logistic regression, we found that the classifier was more accurate, only misclassifying one variable. From the random forest, we found that obesity, air pollution, balanced diet, cough of blood, passive smoker are all strongly correlated with lung cancer. The KNN also correctly predicts the high-risk patients with a sensitivity of 1.00 and the low-risk patients with a specificity of 1.00. This is consistent with previous research that has shown that smoking and obesity are major risk factors for lung cancer. 
+ 
+Unsupervised Methods:
+K-means: In K-means, we found that the data clustered into 7 groups, with each group having a different mean value for the predictors. This suggests that there are distinct subpopulations of individuals with different risk factors for lung cancer. The variables used in clustering were the same as the predictors used in the supervised methods, which further supports the importance of these variables in predicting lung cancer.
+However, when the top 10 occuring variables were subsetted and a K-means was ran on this data, but it did not perform better than the k-means with all of the data. 
+
+PCA: In PCA, we found that the first two principal components explained about 50% of the variation in the data, so this may not have been a good dataset to use PCA on. We can still predict that there are underlying patterns in the data that can be used to predict lung cancer. However, it is important to note that PCA does not directly identify the predictors that are most important for predicting lung cancer.
+
+Further examination in the top 10 highest occurring variables from the clustering plots would shed more light on the predictors of lung cancer. It is important to note, balanced diet showed up as one of the top predictors of lung cancer, and this doesn't make much sense. There could be some discrepencies in the dataset.
+
+
+
+
+## References
+ 
+Anil Kumar, C., Harish, S., Ravi, P., Svn, M., Kumar, B. P. P., Mohanavel, V., Alyami, N. M., Priya, S. S., & Asfaw, A. K. (2022). Lung Cancer Prediction from Text Datasets Using Machine Learning. BioMed research international, 2022, 6254177. https://doi.org/10.1155/2022/6254177
+
+Brocken P., Kiers B. A., Looijen-Salamon M. G., et al. Timeliness of lung cancer diagnosis and treatment in a rapid outpatient diagnostic program with combined 18FDG-PET and contrast enhanced CT scanning. Lung Cancer . 2012;75(3):336–341. doi: 10.1016/j.lungcan.2011.08.017
+
+Dela Cruz, C. S., Tanoue, L. T., & Matthay, R. A. (2011). Lung cancer: epidemiology, etiology, and prevention. Clinics in chest medicine, 32(4), 605–644. https://doi.org/10.1016/j.ccm.2011.09.001
+
+Hirakata Y, Kitamura S. [Pulmonary hypertrophic osteoarthropathy and clubbing of fingers in patients with lung cancer]. Nihon Kyobu Shikkan Gakkai Zasshi. 1995 Oct;33(10):1080-5. Japanese. PMID: 8544379.
+
+
+
